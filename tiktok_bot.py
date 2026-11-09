@@ -1,10 +1,14 @@
 import asyncio
+from collections import deque
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import ConnectEvent, CommentEvent, GiftEvent
 from TikTokLive.client.web.web_settings import WebDefaults
 
 async def start_tiktok_bot(username: str, message_callback):
     WebDefaults.tiktok_sign_api_key = "euler_YjI0Yzc5NGVhYjAyMmEwZmEwMWFlMmIxNDExMTIzOWYwOTk5MWFjODZlZTAzMTk0ODNkNmM4"
+
+    # Son işlenen 500 mesajın ID'sini tutarak tekrarları engeller
+    processed_message_ids = deque(maxlen=500)
 
     async def parse_and_send(user_obj, message_text, msg_type="chat", gift_data=None):
         profile_pic = ""
@@ -96,6 +100,12 @@ async def start_tiktok_bot(username: str, message_callback):
 
         @client.on(CommentEvent)
         async def on_comment(event: CommentEvent):
+            # 1. Benzersiz kimlik kontrolü (event.id veya kullanıcı+yorum kombinasyonu)
+            msg_id = getattr(event, 'id', None) or f"{getattr(event.user, 'user_id', '')}_{event.comment}"
+            if msg_id in processed_message_ids:
+                return
+            processed_message_ids.append(msg_id)
+
             user_obj = getattr(event, 'user', None)
             message_text = getattr(event, 'comment', '')
             await parse_and_send(user_obj, message_text, msg_type="chat")
@@ -106,6 +116,8 @@ async def start_tiktok_bot(username: str, message_callback):
             user_obj = getattr(event, 'user', None)
             
             if gift_obj:
+                # TikTokLive hediyelerde kombo artarken sürekli event fırlatır,
+                # combo_count 1'den büyükken yalnızca son halini veya streak bitişini almak isteyebilirsiniz.
                 gift_name = getattr(gift_obj, 'name', getattr(gift_obj, 'describe', 'Hediye'))
                 combo_count = getattr(gift_obj, 'combo', getattr(gift_obj, 'count', getattr(gift_obj, 'repeat_count', 1)))
                 gift_id = getattr(gift_obj, 'id', getattr(gift_obj, 'gift_id', 0))
@@ -144,5 +156,11 @@ async def start_tiktok_bot(username: str, message_callback):
             await client.start()
         except Exception as e:
             print(f"[TikTok] Yayın kapalı veya bağlantı koptu ({e}). 20 saniye sonra tekrar denenecek...")
+        finally:
+            # Önceki oturum arkada açık kalmasın
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
         
         await asyncio.sleep(20)
