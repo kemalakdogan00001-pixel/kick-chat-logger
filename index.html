@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>Dual Live Chat (TikTok & Kick)</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            background-color: #09090b; 
+            color: #f8fafc; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            height: 100vh; 
+            display: grid;
+            grid-template-columns: 1fr 1fr; 
+            overflow: hidden; 
+        }
+
+        .chat-column {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            position: relative;
+        }
+
+        .chat-column:last-child { border-right: none; }
+
+        header {
+            padding: 12px 16px;
+            font-size: 14px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: #94a3b8;
+            letter-spacing: 0.5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background-color: #121216;
+            z-index: 10;
+        }
+
+        .badge-tiktok { background-color: #fe2c55; color: white; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+        .badge-kick { background-color: #53fc18; color: black; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; }
+
+        /* -----------------------------------------------------
+           SABİT SON 3 BAĞIŞ/HEDİYE PANELİ (PINNED TOP BAR)
+        ------------------------------------------------------ */
+        .pinned-donations {
+            background: rgba(18, 18, 22, 0.95);
+            border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+            padding: 8px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 5;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            max-height: 140px;
+            overflow-y: auto;
+        }
+
+        .pinned-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(255, 140, 0, 0.15));
+            border: 1px solid rgba(255, 215, 0, 0.4);
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .pinned-user {
+            color: #fbbf24;
+            font-weight: bold;
+        }
+
+        .pinned-info {
+            color: #fcd34d;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* ----------------------------------------------------- */
+
+        .chat-container { 
+            flex: 1; 
+            overflow-y: auto; 
+            padding: 16px; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px; 
+            position: relative;
+            overflow-anchor: none;
+        }
+
+        .chat-container::-webkit-scrollbar { width: 5px; }
+        .chat-container::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 10px; }
+        
+        .chat-message { 
+            display: flex; 
+            align-items: flex-start; 
+            gap: 12px; 
+            background: linear-gradient(135deg, rgba(24, 24, 27, 0.8), rgba(18, 18, 20, 0.9));
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 12px 14px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            transition: all 0.3s ease;
+            flex-shrink: 0;
+        }
+
+        .chat-message.gift {
+            background: linear-gradient(135deg, rgba(255, 215, 0, 0.15), rgba(255, 140, 0, 0.3));
+            border: 1px solid rgba(255, 215, 0, 0.6);
+            animation: slideInZoom 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, goldPulse 2s infinite;
+            transform-origin: left center;
+        }
+
+        @keyframes slideInZoom {
+            0% { transform: scale(0.5) translateX(-100%); opacity: 0; }
+            100% { transform: scale(1) translateX(0); opacity: 1; }
+        }
+
+        @keyframes goldPulse {
+            0%, 100% { box-shadow: 0 0 15px rgba(255, 215, 0, 0.3); }
+            50% { box-shadow: 0 0 25px rgba(255, 215, 0, 0.7), inset 0 0 10px rgba(255, 215, 0, 0.2); }
+        }
+        
+        .avatar { 
+            width: 38px; height: 38px; border-radius: 50%; object-fit: cover; background-color: #27272a; flex-shrink: 0; 
+            border: 2px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .content { flex: 1; overflow: hidden; }
+        .header-line { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; flex-wrap: wrap; }
+        .username { font-weight: 600; font-size: 14px; }
+        
+        .chat-message.gift .username { 
+            color: #fbbf24 !important; 
+            text-shadow: 0 0 5px rgba(251, 191, 36, 0.5); 
+            font-size: 15px;
+        }
+        
+        .badge-icon { height: 16px; vertical-align: middle; border-radius: 2px; object-fit: contain; }
+        
+        .text-badge {
+            background-color: rgba(225, 29, 72, 0.2); color: #fb7185; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; height: 18px; border: 1px solid rgba(225, 29, 72, 0.3);
+        }
+        .text-badge img { height: 12px; object-fit: contain; }
+
+        /* --- KICK ORİJİNAL ROZET RENKLERİ --- */
+        .kick-badge { font-weight: 800 !important; text-transform: uppercase; }
+        .kick-sub { background-color: #4b5563 !important; color: #fff !important; border-color: #374151 !important; }
+
+        .text { font-size: 14px; color: #e2e8f0; word-break: break-word; line-height: 1.5; }
+        
+        .gift-wrapper {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 6px;
+            border: 1px solid rgba(255, 215, 0, 0.2);
+        }
+        
+        .gift-info { display: flex; flex-direction: column; gap: 4px; }
+        .gift-action { color: #fff; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 6px; }
+
+        .combo-count {
+            color: #ff0050;
+            font-size: 22px;
+            font-weight: 900;
+            text-shadow: 0 0 8px rgba(255, 0, 80, 0.8), 2px 2px 0px #fff;
+            font-style: italic;
+        }
+        
+        .combo-hit { animation: hitCombo 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+
+        @keyframes hitCombo {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.6) rotate(5deg); color: #fff; text-shadow: 0 0 15px #ff0050; }
+            100% { transform: scale(1); }
+        }
+
+        .gift-coins {
+            color: #fcd34d;
+            font-size: 13px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: rgba(255, 215, 0, 0.15);
+            padding: 3px 8px;
+            border-radius: 6px;
+            width: fit-content;
+            box-shadow: 0 0 5px rgba(255, 215, 0, 0.2);
+        }
+
+        .gift-big-icon {
+            width: 50px; height: 50px; object-fit: contain;
+            animation: spin-bounce 1s infinite ease-in-out;
+            filter: drop-shadow(0 0 8px rgba(255,215,0,0.6));
+        }
+
+        /* -----------------------------------------------------
+           YENİ MESAJLAR ÇİZGİSİ VE BİLDİRİM BALONU
+        ------------------------------------------------------ */
+        .unread-divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #ef4444;
+            font-size: 11px;
+            font-weight: bold;
+            margin: 8px 0;
+            width: 100%;
+            flex-shrink: 0;
+        }
+        .unread-divider::before, .unread-divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #ef4444;
+        }
+        .unread-divider span {
+            padding: 0 10px;
+            background: #18181b;
+            border-radius: 10px;
+            border: 1px solid #ef4444;
+        }
+
+        .scroll-badge {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #fe2c55;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(254, 44, 85, 0.5);
+            cursor: pointer;
+            z-index: 20;
+            display: none;
+            transition: transform 0.2s;
+            user-select: none;
+        }
+        .scroll-badge:hover { transform: translateX(-50%) scale(1.05); }
+    </style>
+</head>
+<body>
+
+    <!-- SOL TARAF: TİKTOK CHAT -->
+    <div class="chat-column">
+        <header>
+            <span>TikTok Sohbeti</span>
+            <span class="badge-tiktok">TIKTOK</span>
+        </header>
+        <div id="tiktok-pinned" class="pinned-donations" style="display: none;"></div>
+        <div id="tiktok-chat" class="chat-container"></div>
+        <div id="tiktok-scroll-badge" class="scroll-badge" onclick="scrollToBottom('tiktok')">↓ <span id="tiktok-unread-count">0</span> yeni mesaj</div>
+    </div>
+
+    <!-- SAĞ TARAF: KİCK CHAT -->
+    <div class="chat-column">
+        <header>
+            <span>Kick Sohbeti</span>
+            <span class="badge-kick">KICK</span>
+        </header>
+        <div id="kick-pinned" class="pinned-donations" style="display: none;"></div>
+        <div id="kick-chat" class="chat-container"></div>
+        <div id="kick-scroll-badge" class="scroll-badge" onclick="scrollToBottom('kick')">↓ <span id="kick-unread-count">0</span> yeni mesaj</div>
+    </div>
+
+    <script>
+        const tiktokContainer = document.getElementById('tiktok-chat');
+        const kickContainer = document.getElementById('kick-chat');
+        
+        const chatStates = {
+            tiktok: { unreadCount: 0, isScrolledUp: false, isAutoScrolling: false, recentGifts: [] },
+            kick: { unreadCount: 0, isScrolledUp: false, isAutoScrolling: false, recentGifts: [] }
+        };
+
+        const nameColors = ['#f87171', '#fb923c', '#fbbf24', '#a3e635', '#4ade80', '#34d399', '#2dd4bf', '#38bdf8', '#60a5fa', '#818cf8', '#a78bfa', '#c084fc', '#e879f9', '#f472b6', '#fb7185'];
+        
+        function getColorForUsername(username) {
+            let hash = 0;
+            for (let i = 0; i < username.length; i++) {
+                hash = username.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return nameColors[Math.abs(hash) % nameColors.length];
+        }
+
+        function stickToBottom(platform, container) {
+            const state = chatStates[platform];
+            state.isAutoScrolling = true;
+            container.scrollTop = container.scrollHeight;
+            
+            requestAnimationFrame(() => {
+                if (!state.isScrolledUp) {
+                    container.scrollTop = container.scrollHeight;
+                }
+                state.isAutoScrolling = false;
+            });
+        }
+
+        tiktokContainer.addEventListener('scroll', () => checkScroll('tiktok', tiktokContainer), { passive: true });
+        kickContainer.addEventListener('scroll', () => checkScroll('kick', kickContainer), { passive: true });
+
+        function checkScroll(platform, container) {
+            const state = chatStates[platform];
+            
+            if (state.isAutoScrolling) return;
+
+            const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+            const isUp = distanceFromBottom > 35;
+            
+            state.isScrolledUp = isUp;
+
+            if (!isUp) {
+                state.unreadCount = 0;
+                document.getElementById(`${platform}-scroll-badge`).style.display = 'none';
+                
+                const divider = container.querySelector('.unread-divider');
+                if (divider) divider.remove();
+
+                while (container.children.length > 250) {
+                    container.removeChild(container.firstChild);
+                }
+            }
+        }
+
+        function scrollToBottom(platform) {
+            const container = platform === 'tiktok' ? tiktokContainer : kickContainer;
+            const state = chatStates[platform];
+
+            state.isScrolledUp = false;
+            state.unreadCount = 0;
+            document.getElementById(`${platform}-scroll-badge`).style.display = 'none';
+
+            const divider = container.querySelector('.unread-divider');
+            if (divider) divider.remove();
+
+            while (container.children.length > 250) {
+                container.removeChild(container.firstChild);
+            }
+
+            stickToBottom(platform, container);
+        }
+
+        function updatePinnedGifts(platform, data) {
+            const state = chatStates[platform];
+            
+            state.recentGifts = state.recentGifts.filter(g => !(g.username === data.username && g.gift_name === data.gift_name));
+            state.recentGifts.unshift(data);
+            
+            if (state.recentGifts.length > 3) {
+                state.recentGifts.pop();
+            }
+
+            const pinnedEl = document.getElementById(`${platform}-pinned`);
+            pinnedEl.style.display = 'flex';
+            
+            pinnedEl.innerHTML = state.recentGifts.map(g => `
+                <div class="pinned-item">
+                    <span class="pinned-user">👑 ${g.username}</span>
+                    <span class="pinned-info">x${g.gift_count} ${g.gift_name} (${g.total_coins || 0} 🪙)</span>
+                </div>
+            `).join('');
+        }
+
+        const tiktokEmojiMap = {
+            '[laughcry]': '😂', '[smile]': '😊', '[cry]': '😭', '[speechless]': '😶',
+            '[funnyface]': '🤪', '[facewithhearts]': '🥰', '[angry]': '😡', '[thinking]': '🤔',
+            '[heart]': '❤️', '[fire]': '🔥', '[like]': '👍'
+        };
+
+        function parseEmojis(text) {
+            if (!text) return "";
+            let newText = text;
+            for (const [key, value] of Object.entries(tiktokEmojiMap)) {
+                newText = newText.replace(new RegExp(key.replace(/\[/g, '\\[').replace(/\]/g, '\\]'), 'gi'), value);
+            }
+            return newText;
+        }
+
+        const kickOriginalBadges = {
+            "verified": `<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="none" height="18" style="vertical-align: middle; margin-right: 4px;"><path fill="url(#ds-icon-5f-72-5f-37-39-30-5f-0)" fill-rule="evenodd" d="M9.15 1.43c.48-.57 1.18-.57 1.64 0l1.26 1.58c.1.1.18.14.33.1q.97-.29 1.96-.54c.7-.18 1.27.23 1.3.95q.09 1 .11 2.03 0 .22.19.27l1.86.7c.74.27.97.91.54 1.58l-1.1 1.67c-.08.13-.08.2 0 .33l1.12 1.72c.4.6.18 1.26-.48 1.6q-.94.38-1.88.72c-.12.04-.2.1-.2.27l-.11 2.07c-.02.7-.6 1.11-1.28.93l-1.99-.54c-.14-.04-.2 0-.29.1l-1.28 1.6c-.46.57-1.14.57-1.62 0l-1.28-1.6q-.1-.17-.29-.1c-.64.18-1.28.33-1.92.54-.8.25-1.39-.35-1.39-1.02 0-.66-.08-1.3-.1-1.96q.02-.22-.19-.27l-1.94-.75a.98.98 0 0 1-.5-1.47q.55-.89 1.14-1.75c.08-.15.08-.23 0-.36L1.64 8.12c-.4-.6-.18-1.24.48-1.51l1.92-.75c.13-.06.19-.12.19-.27q.03-1.04.1-2.07c.04-.74.58-1.1 1.47-.89l1.74.48q.23.08.37-.12zm5.36 5a1.4 1.4 0 0 0-1.98.09l-4.17 4.54-1.3-1.3a1.4 1.4 0 0 0-2.09 1.88l.1.1L7.4 14.1a1.4 1.4 0 0 0 2.03-.05l5.16-5.62a1.4 1.4 0 0 0-.09-1.99" clip-rule="evenodd"></path><defs><linearGradient id="ds-icon-5f-72-5f-37-39-30-5f-0" x1="5.58" x2="14.78" y1="19.2" y2="1.51" gradientUnits="userSpaceOnUse"><stop stop-color="#1eff00"></stop><stop offset=".99" stop-color="#00ff8c"></stop></linearGradient></defs></svg>`,
+            "broadcaster": `<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="none" height="18" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#ds-icon-5f-72-5f-32-6d-67-5f-2" fill="url(#ds-icon-5f-72-5f-32-6d-67-5f-0)"></use><use xlink:href="#ds-icon-5f-72-5f-32-6d-67-5f-2" fill="#fff" fill-opacity=".3"></use><path fill="url(#ds-icon-5f-72-5f-32-6d-67-5f-1)" d="M16.02 8.13a.7.7 0 0 0-.48-.2.7.7 0 0 0-.49.2q-.2.2-.2.49V10q0 2-1.43 3.42A4.7 4.7 0 0 1 10 14.85a4.7 4.7 0 0 1-3.42-1.43A4.7 4.7 0 0 1 5.15 10V8.62a.7.7 0 0 0-.2-.5.7.7 0 0 0-.49-.2.7.7 0 0 0-.49.2q-.2.21-.2.5V10a6 6 0 0 0 1.6 4.16 6 6 0 0 0 3.94 2.03v1.43H6.54a.7.7 0 0 0-.49.2q-.2.2-.2.49t.2.48q.2.21.49.21h6.92q.28 0 .49-.2t.2-.5a.7.7 0 0 0-.2-.48.7.7 0 0 0-.49-.2H10.7v-1.43a6 6 0 0 0 3.95-2.03 6 6 0 0 0 1.6-4.16V8.62a.7.7 0 0 0-.21-.5"></path><defs><linearGradient id="ds-icon-5f-72-5f-32-6d-67-5f-0" x1="-5.87" x2="19.51" y1="1" y2="32.63" gradientUnits="userSpaceOnUse"><stop stop-color="#ff1cd2"></stop><stop offset="1" stop-color="#b20dff"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-32-6d-67-5f-1" x1="1.18" x2="3.84" y1="1" y2="21.04" gradientUnits="userSpaceOnUse"><stop stop-color="#ff1cd2"></stop><stop offset="1" stop-color="#b20dff"></stop></linearGradient><path id="ds-icon-5f-72-5f-32-6d-67-5f-2" d="M10 13.46q1.43 0 2.44-1.02A3.3 3.3 0 0 0 13.46 10V4.46q0-1.43-1.02-2.44A3.3 3.3 0 0 0 10 1Q8.57 1 7.56 2.02a3.3 3.3 0 0 0-1.02 2.44V10q0 1.43 1.02 2.44 1.01 1.02 2.44 1.02"></path></defs></svg>`,
+            "mod": `<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="none" height="18" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#ds-icon-5f-72-5f-31-38-63-5f-3" fill="url(#ds-icon-5f-72-5f-31-38-63-5f-0)"></use><use xlink:href="#ds-icon-5f-72-5f-31-38-63-5f-3" fill="url(#ds-icon-5f-72-5f-31-38-63-5f-1)"></use><use xlink:href="#ds-icon-5f-72-5f-31-38-63-5f-3" fill="url(#ds-icon-5f-72-5f-31-38-63-5f-2)"></use><defs><linearGradient id="ds-icon-5f-72-5f-31-38-63-5f-0" x1="11.58" x2="2.62" y1="-6.16" y2="23" gradientUnits="userSpaceOnUse"><stop stop-color="#ff6a4a"></stop><stop offset="1" stop-color="#c70c00"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-31-38-63-5f-1" x1="9.86" x2="10.18" y1="-1.68" y2="22.98" gradientUnits="userSpaceOnUse"><stop stop-color="#ffc900"></stop><stop offset=".99" stop-color="#ff9500"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-31-38-63-5f-2" x1="-7.41" x2="19" y1="27.41" y2="1" gradientUnits="userSpaceOnUse"><stop stop-color="#0095ff"></stop><stop offset=".99" stop-color="#00c7ff"></stop></linearGradient><path id="ds-icon-5f-72-5f-31-38-63-5f-3" fill-rule="evenodd" d="M17.88 1C18.5 1 19 1.5 19 2.13v15.75c0 .62-.5 1.12-1.12 1.12H2.13C1.5 19 1 18.5 1 17.88V2.13C1 1.5 1.5 1 2.13 1zm-7.76 1.68a.56.56 0 0 0-.8 0L5.7 6.31a.56.56 0 0 0 0 .8l.98.97c.22.21.57.21.8 0l.04-.05 1.32 1.33-5.83 5.83a1.25 1.25 0 0 0 1.77 1.77l5.83-5.84 1.33 1.33-.05.04a.56.56 0 0 0 0 .8l.97.97c.22.22.58.22.8 0l3.62-3.62a.56.56 0 0 0 0-.8l-.97-.97a.56.56 0 0 0-.8 0l-.04.04-1.32-1.32a1.25 1.25 0 0 0-1.77-1.77L11.05 4.5l.05-.05a.56.56 0 0 0 0-.8z" clip-rule="evenodd"></path></defs></svg>`,
+            "vip": `<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="none" height="18" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#ds-icon-5f-72-5f-31-36-76-5f-2" fill="url(#ds-icon-5f-72-5f-31-36-76-5f-0)"></use><use xlink:href="#ds-icon-5f-72-5f-31-36-76-5f-2" fill="url(#ds-icon-5f-72-5f-31-36-76-5f-1)"></use><defs><linearGradient id="ds-icon-5f-72-5f-31-36-76-5f-0" x1="11.58" x2="2.62" y1="-6.16" y2="23" gradientUnits="userSpaceOnUse"><stop stop-color="#ff6a4a"></stop><stop offset="1" stop-color="#c70c00"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-31-36-76-5f-1" x1="9.86" x2="10.18" y1="-1.68" y2="22.98" gradientUnits="userSpaceOnUse"><stop stop-color="#ffc900"></stop><stop offset=".99" stop-color="#ff9500"></stop></linearGradient><path id="ds-icon-5f-72-5f-31-36-76-5f-2" fill-rule="evenodd" d="M17.88 1C18.5 1 19 1.5 19 2.13v15.75c0 .62-.5 1.12-1.12 1.12H2.13C1.5 19 1 18.5 1 17.88V2.13C1 1.5 1.5 1 2.13 1zm-7.9 2.81a.6.6 0 0 0-.53.32L6.53 9.45 3 7.69a.6.6 0 0 0-.64.07.6.6 0 0 0-.22.62l1.44 6.75q.04.22.21.36a.6.6 0 0 0 .4.13h11.58a.6.6 0 0 0 .38-.13.6.6 0 0 0 .22-.36l1.49-6.75a.6.6 0 0 0-.22-.64.6.6 0 0 0-.65-.06l-3.56 1.77-2.92-5.32a1 1 0 0 0-.23-.23 1 1 0 0 0-.3-.09" clip-rule="evenodd"></path></defs></svg>`,
+            "og": `<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="none" height="18" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#ds-icon-5f-72-5f-32-38-37-5f-2" fill="#fff"></use><use xlink:href="#ds-icon-5f-72-5f-32-38-37-5f-2" fill="url(#ds-icon-5f-72-5f-32-38-37-5f-0)"></use><path fill="#00fff2" d="M13.84 3.25v6.04q0 .17.12.27.12.09.37.09h.46v1.88h-1.5q-1.59 0-2.26-.55a2 2 0 0 1-.65-1.48V3.03q0-.9.65-1.47Q11.7 1 13.28 1h1.59v1.89h-.54q-.26 0-.37.1-.12.08-.12.26M19 5.7v1.82h-4.45V5.71zm-3.46-1.1V3.25q0-.18-.12-.26-.12-.1-.38-.1h-.53V1h1.58q1.59 0 2.24.56.67.55.67 1.47v1.58zm0 4.68V6.97H19V9.5q0 .91-.67 1.48-.65.55-2.24.55h-1.5V9.65h.45q.26 0 .38-.09a.3.3 0 0 0 .12-.27"></path><use xlink:href="#ds-icon-5f-72-5f-32-38-37-5f-3" fill="#fff"></use><use xlink:href="#ds-icon-5f-72-5f-32-38-37-5f-3" fill="url(#ds-icon-5f-72-5f-32-38-37-5f-1)"></use><path fill="#00fff2" d="M6.28 12.86v-1.98q0-.18-.12-.26-.12-.1-.37-.1h-.66V8.47h1.7q1.58 0 2.24.55.67.57.67 1.48v2.36zm0 3.73v-3.94h3.46v4.32q0 .9-.67 1.47-.65.56-2.24.56h-1.7v-2.05h.66q.26 0 .37-.08a.3.3 0 0 0 .12-.28m-1.82-5.71v1.98H1V10.5q0-.91.65-1.48.67-.55 2.26-.55h1.7v2.05h-.65q-.26 0-.38.1-.12.08-.12.26m0 1.77v3.94q0 .18.12.28.12.08.38.08h.65V19H3.9q-1.58 0-2.26-.56A2 2 0 0 1 1 16.97v-4.32z"></path><defs><linearGradient id="ds-icon-5f-72-5f-32-38-37-5f-0" x1="9.56" x2="9.93" y1="-11.09" y2="19" gradientUnits="userSpaceOnUse"><stop stop-color="#00fff2"></stop><stop offset="1" stop-color="#006399"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-32-38-37-5f-1" x1="10" x2="10.11" y1="1" y2="32.3" gradientUnits="userSpaceOnUse"><stop stop-color="#00fff2"></stop><stop offset="1" stop-color="#006399"></stop></linearGradient><path id="ds-icon-5f-72-5f-32-38-37-5f-2" d="M13.84 10.71v6.04q0 .18.12.28.12.09.37.08h.46V19h-1.5q-1.59 0-2.26-.56a2 2 0 0 1-.65-1.47V10.5q0-.91.65-1.48.67-.55 2.25-.55h1.59v1.88h-.54q-.26 0-.37.1-.12.09-.12.26M19 13.18V15h-4.45v-1.82zm-3.46-1.1V10.7q0-.17-.12-.26-.12-.1-.38-.1h-.53V8.47h1.58q1.59 0 2.24.55.67.57.67 1.48v1.58zm0 4.67v-2.31H19v2.53q0 .9-.67 1.47-.66.56-2.24.56h-1.5v-1.89h.45q.27 0 .38-.08a.3.3 0 0 0 .12-.28"></path><path id="ds-icon-5f-72-5f-32-38-37-5f-3" d="M6.28 5.4v-2q0-.18-.12-.26-.12-.1-.37-.1h-.66V1h1.7q1.58 0 2.24.56.67.55.67 1.47V5.4zm0 3.72V5.18h3.46V9.5q0 .91-.67 1.48-.65.55-2.24.55h-1.7V9.48h.66q.26 0 .37-.08a.3.3 0 0 0 .12-.28m-1.82-5.7V5.4H1V3.03q0-.9.65-1.47Q2.32 1 3.91 1h1.7v2.05h-.65q-.26 0-.38.1-.12.08-.12.26m0 1.76v3.94q0 .19.12.28t.38.08h.65v2.05H3.9q-1.58 0-2.26-.55A2 2 0 0 1 1 9.5V5.18z"></path></defs></svg>`,
+            "founder": `<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="none" height="18" style="vertical-align: middle; margin-right: 4px;"><path fill="url(#ds-icon-5f-72-5f-6f-61-5f-0)" d="M10 19a9 9 0 1 0 0-18 9 9 0 0 0 0 18"></path><path fill="url(#ds-icon-5f-72-5f-6f-61-5f-1)" d="M10 19a9 9 0 1 0 0-18 9 9 0 0 0 0 18"></path><path fill="#feb635" d="M10 17.33a7.33 7.33 0 1 0 0-14.66 7.33 7.33 0 0 0 0 14.66"></path><path fill="url(#ds-icon-5f-72-5f-6f-61-5f-2)" d="M10 17.33a7.33 7.33 0 1 0 0-14.66 7.33 7.33 0 0 0 0 14.66"></path><path fill="#000" fill-opacity=".05" d="M17.33 10a7.34 7.34 0 0 1-10.95 6.37 7.34 7.34 0 0 0 6.9-12.93A7.3 7.3 0 0 1 17.32 10M10.5 3.01c1.44 0 2.8.42 3.92 1.14A7.33 7.33 0 1 0 6.1 16.21 7.32 7.32 0 0 1 10.5 3"></path><path fill="#000" fill-opacity=".8" d="M11.46 6.32v8.18H9.24V8.36h-.05L7.4 9.43V7.55l2.02-1.23z"></path><path fill="url(#ds-icon-5f-72-5f-6f-61-5f-3)" d="M11.46 6.32v8.18H9.24V8.36h-.05L7.4 9.43V7.55l2.02-1.23z" style="mix-blend-mode:soft-light"></path><defs><linearGradient id="ds-icon-5f-72-5f-6f-61-5f-0" x1="9.86" x2="10.14" y1="-1.51" y2="21.64" gradientUnits="userSpaceOnUse"><stop stop-color="#ffc900"></stop><stop offset=".99" stop-color="#ff9500"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-6f-61-5f-1" x1="10" x2="10" y1="1" y2="19" gradientUnits="userSpaceOnUse"><stop stop-color="#fff" stop-opacity=".3"></stop><stop offset="1" stop-color="#fff" stop-opacity=".15"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-6f-61-5f-2" x1="9.86" x2="10.14" y1="-1.51" y2="21.64" gradientUnits="userSpaceOnUse"><stop stop-color="#ffc900"></stop><stop offset=".99" stop-color="#ff9500"></stop></linearGradient><pattern id="ds-icon-5f-72-5f-6f-61-5f-3" width="1" height="1" patternContentUnits="objectBoundingBox"><use xlink:href="#ds-icon-5f-72-5f-6f-61-5f-4" transform="translate(1 1)scale(-.00417)"></use></pattern></defs></svg>`,
+            "bot": `<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg" fill="none" height="18" style="vertical-align: middle; margin-right: 4px;"><path fill="url(#ds-icon-5f-72-5f-72-68-5f-0)" d="M10.88 1H9.13a.75.75 0 0 0-.75.75V3.5c0 .41.34.75.75.75h1.75c.41 0 .75-.34.75-.75V1.75a.75.75 0 0 0-.75-.75"></path><path fill="url(#ds-icon-5f-72-5f-72-68-5f-1)" d="M10.75 4.25h-1.5v1.5h1.5z"></path><path fill="url(#ds-icon-5f-72-5f-72-68-5f-2)" d="M4 9.34s-3 0-3 3 3 3 3 3z"></path><path fill="url(#ds-icon-5f-72-5f-72-68-5f-3)" d="M16 9.34s3 0 3 3-3 3-3 3z"></path><path fill="#4fd8ff" d="M16 7.09H4v9.76h12z"></path><path fill="url(#ds-icon-5f-72-5f-72-68-5f-4)" d="M9.87 7.34c2.61 0 4.68.58 5.33 1.14.64.88.52 6.29-.19 7.19-.37.43-2.16 1.09-4.85 1.09-2.84 0-4.81-.71-5.25-1.18-.7-.87-.73-6.3-.06-7.15.42-.42 2.15-1.09 5.02-1.09m0-2.25c-2.73 0-5.43.57-6.61 1.75-1.55 1.55-1.5 8.67 0 10.27C4.42 18.35 7.3 19 10.16 19s5.51-.62 6.58-1.9c1.4-1.67 1.62-8.79 0-10.26-1.26-1.15-4.08-1.75-6.87-1.75"></path><path fill="#000" d="M13.94 11.11a1.31 1.31 0 1 0-2.63 0V13a1.31 1.31 0 1 0 2.63 0zm-5.25 0a1.31 1.31 0 1 0-2.63 0V13a1.31 1.31 0 1 0 2.63 0z"></path><defs><linearGradient id="ds-icon-5f-72-5f-72-68-5f-0" x1="9.98" x2="9.98" y1="1.5" y2="25.36" gradientUnits="userSpaceOnUse"><stop stop-color="#00c7ff"></stop><stop offset=".99" stop-color="#006399"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-72-68-5f-1" x1="10" x2="10" y1="-37.97" y2="-37.97" gradientUnits="userSpaceOnUse"><stop stop-color="#00c7ff"></stop><stop offset=".99" stop-color="#006399"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-72-68-5f-2" x1="10.72" x2="10.48" y1=".89" y2="18.87" gradientUnits="userSpaceOnUse"><stop stop-color="#00c7ff"></stop><stop offset=".99" stop-color="#006399"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-72-68-5f-3" x1="9.28" x2="9.52" y1=".89" y2="18.87" gradientUnits="userSpaceOnUse"><stop stop-color="#00c7ff"></stop><stop offset=".99" stop-color="#006399"></stop></linearGradient><linearGradient id="ds-icon-5f-72-5f-72-68-5f-4" x1="3.89" x2="21.62" y1="1.33" y2="20.61" gradientUnits="userSpaceOnUse"><stop stop-color="#00c7ff"></stop><stop offset=".99" stop-color="#006399"></stop></linearGradient></defs></svg>`
+        };
+
+        function appendMessage(container, data) {
+            try {
+                if (!data || !data.message || data.message.trim() === '') return;
+
+                const platform = container.id.includes('tiktok') ? 'tiktok' : 'kick';
+                const state = chatStates[platform];
+
+                if (data.type === 'gift') {
+                    updatePinnedGifts(platform, data);
+                    
+                    const comboId = `combo-${data.username}-${data.gift_id}`.replace(/\s+/g, '-');
+                    const existingGift = container.querySelector(`#${CSS.escape(comboId)}`);
+
+                    if (existingGift) {
+                        const countEl = existingGift.querySelector('.combo-count');
+                        const coinEl = existingGift.querySelector('.coin-val');
+                        
+                        if (countEl && coinEl) {
+                            countEl.innerText = `x${data.gift_count}`;
+                            coinEl.innerText = data.total_coins;
+                            
+                            countEl.classList.remove('combo-hit');
+                            void countEl.offsetWidth;
+                            countEl.classList.add('combo-hit');
+                        }
+
+                        if (!state.isScrolledUp) {
+                            stickToBottom(platform, container);
+                        }
+
+                        return;
+                    }
+                }
+
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'chat-message';
+                
+                if (data.type === 'gift') {
+                    messageDiv.classList.add('gift');
+                    messageDiv.id = `combo-${data.username}-${data.gift_id}`.replace(/\s+/g, '-');
+                }
+                
+                let badgesHtml = '';
+                if (data.badges && Array.isArray(data.badges)) {
+                    badgesHtml = data.badges.map(b => {
+                        if (!b) return '';
+                        
+                        if (platform === 'kick') {
+                            let badgeTypeKey = b.css_class ? b.css_class.replace('kick-', '') : '';
+                            if (!badgeTypeKey && b.name && b.name.toLowerCase() === 'bot') badgeTypeKey = 'bot';
+                            if (!badgeTypeKey && b.name && b.name.toLowerCase() === 'verified') badgeTypeKey = 'verified';
+
+                            if (badgeTypeKey && kickOriginalBadges[badgeTypeKey]) {
+                                return kickOriginalBadges[badgeTypeKey];
+                            } else if (badgeTypeKey === 'sub' && b.url && b.url.trim() !== "") {
+                                return `<img src="${b.url}" class="badge-icon" style="height: 18px; margin-right: 4px;" alt="Abone" title="Abone">`;
+                            } else if (b.name) {
+                                const extraClass = b.css_class ? `kick-badge ${b.css_class}` : '';
+                                return `<span class="text-badge ${extraClass}">${b.name}</span>`;
+                            }
+                        } else {
+                            if (b.name && b.url && b.url.trim() !== "") {
+                                return `<span class="text-badge"><img src="${b.url}" alt="${b.name}">${b.name}</span>`;
+                            } else if (b.name && (!b.url || b.url.trim() === "")) {
+                                return `<span class="text-badge">${b.name}</span>`;
+                            } else if (b.url && b.url.trim() !== "") {
+                                return `<img src="${b.url}" class="badge-icon" alt="Badge">`;
+                            }
+                        }
+                        return '';
+                    }).join('');
+                }
+
+                const safeUsername = data.username ? data.username : 'User';
+                const defaultAvatar = 'https://ui-avatars.com/api/?name=' + encodeURIComponent(safeUsername) + '&background=27272a&color=fff';
+                const safeAvatar = (data.avatar && data.avatar.trim() !== '') ? data.avatar : defaultAvatar;
+                const parsedText = parseEmojis(data.message);
+                
+                const userColor = getColorForUsername(safeUsername);
+
+                let contentHTML = `
+                    <div class="header-line">
+                        ${badgesHtml}
+                        <span class="username" style="color: ${userColor};">${safeUsername}</span>
+                    </div>
+                `;
+
+                if (data.type === 'gift') {
+                    const coinCount = data.total_coins || 0;
+                    const comboCount = data.gift_count || 1;
+                    
+                    contentHTML += `
+                        <div class="gift-wrapper">
+                            <div class="gift-info">
+                                <span class="gift-action">
+                                    <span class="combo-count combo-hit">x${comboCount}</span> ${data.gift_name}
+                                </span>
+                                <span class="gift-coins">🪙 <span class="coin-val">${coinCount}</span> Jeton</span>
+                            </div>
+                            ${data.gift_icon ? `<img src="${data.gift_icon}" class="gift-big-icon">` : ''}
+                        </div>
+                    `;
+                } else {
+                    contentHTML += `<div class="text">${parsedText}</div>`;
+                }
+
+                messageDiv.innerHTML = `
+                    <img class="avatar" src="${safeAvatar}" alt="Avatar" onerror="this.onerror=null;this.src='${defaultAvatar}';">
+                    <div class="content">${contentHTML}</div>
+                `;
+                
+                if (state.isScrolledUp) {
+                    state.unreadCount++;
+                    
+                    if (state.unreadCount === 1) {
+                        const oldDivider = container.querySelector('.unread-divider');
+                        if (oldDivider) oldDivider.remove();
+
+                        const divider = document.createElement('div');
+                        divider.className = 'unread-divider';
+                        divider.innerHTML = `<span>Yeni Mesajlar</span>`;
+                        container.appendChild(divider);
+                    }
+
+                    document.getElementById(`${platform}-unread-count`).innerText = state.unreadCount;
+                    document.getElementById(`${platform}-scroll-badge`).style.display = 'block';
+                }
+
+                container.appendChild(messageDiv);
+
+                const images = messageDiv.querySelectorAll('img');
+                images.forEach(img => {
+                    img.addEventListener('load', () => {
+                        if (!state.isScrolledUp) {
+                            stickToBottom(platform, container);
+                        }
+                    }, { once: true });
+                });
+
+                if (!state.isScrolledUp) {
+                    while (container.children.length > 250) {
+                        container.removeChild(container.firstChild);
+                    }
+                    stickToBottom(platform, container);
+                }
+
+            } catch (err) {
+                console.error("Mesaj ekrana basılırken hata oluştu:", err, data);
+            }
+        }
+
+        function connect() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = window.location.host ? `${protocol}//${window.location.host}` : 'ws://localhost:8765';
+            const ws = new WebSocket(wsUrl);
+            
+            ws.onmessage = (event) => {
+                try {
+                    const packet = JSON.parse(event.data);
+
+                    if (packet.type === 'history') {
+                        if (packet.messages && Array.isArray(packet.messages)) {
+                            packet.messages.forEach(data => {
+                                if (data.platform === 'tiktok') appendMessage(tiktokContainer, data);
+                                else if (data.platform === 'kick') appendMessage(kickContainer, data);
+                            });
+                            stickToBottom('tiktok', tiktokContainer);
+                            stickToBottom('kick', kickContainer);
+                        }
+                    } 
+                    else if (packet.type === 'chat' || packet.type === 'gift') {
+                        if (packet.platform === 'tiktok') {
+                            appendMessage(tiktokContainer, packet);
+                        } else if (packet.platform === 'kick') {
+                            appendMessage(kickContainer, packet);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Gelen veri işlenemedi:", err);
+                }
+            };
+
+            ws.onclose = () => setTimeout(connect, 3000);
+        }
+
+        connect();
+    </script>
+</body>
+</html>
